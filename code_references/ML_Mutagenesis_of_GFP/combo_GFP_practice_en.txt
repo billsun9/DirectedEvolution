@@ -1,0 +1,99 @@
+1. Preparing files
+
+combo_GFP_snapshot.tar.gz
+COMBO software
+Same as that in https://github.com/tsudalab/combo, 
+but saved as the version used in the GFP paper.
+
+combo_GFP_practice.tar.gz
+Data for the practice to reproduce the results in the GFP paper.
+
+Decompress the files.
+tar xzvf combo_GFP_snapshot.tar.gz
+tar xzvf combo_GFP_practice.tar.gz
+
+
+2. Install COMBO
+
+Install COMBO in a python virtual environment using virtualenv
+
+Install virtualenv.
+* do only this step as root
+yum install python-virtualenv
+yum install emacs
+
+* this practice is tested with CentOS and python2.7
+* use the corresponding package manager instead of yum when using other Linux distro
+
+Make a python virtual environment.
+* do the remaining steps as general user 
+mkdir -p ~/local/virtualenv/combo_practice
+virtualenv ~/local/virtualenv/combo_practice
+
+Install COMBO in the virtual environment.
+source ~/local/virtualenv/combo_practice/bin/activate
+First, install the packages required by COMBO
+pip install numpy
+pip install scipy
+pip install Cython
+pip install six
+Then, install COMBO
+cd combo_GFP_snapshot
+python setup.py install
+
+Since Saito has modified some part of COMBO for the GFP paper, copy that file.
+cd combo_GFP_practice/script
+cp policy.py ~/local/virtualenv/combo_practice/lib64/python2.7/site-packages/combo/search/discrete/
+
+From now, to use COMBO, enter in the virtual environment using the following command.
+source ~/local/virtualenv/combo_practice/bin/activate
+
+
+3. Draw evaluation curves (reproduce Sup Fig 1 in the GFP paper)
+
+Umetsu_GFP.csv is a list of sequences, fluorescence intensity, and fluorescence change.
+Make an input file for machine learning from this file.
+Compute feature vectors from sequences, 
+and transform fluorescence intensity and fluorescence change in to a score.
+perl Umetsu_GFP_ssf.pl Umetsu_GFP.csv T-scale 4 > Umetsu_GFP_T-scale.csv
+
+where the type of feature (T-scale) and the number of mutated residues (4) are specified.
+Edit Umetsu_GFP_ssf.pl to specify resource/aafeat directory.
+
+After making an input file, perform machine learning using COMBO.
+Select five data randomly as initial data, 
+then repeat the following procedure 95 times.
+"train a model using the current training data,
+predict for the remaining data,
+select the data with the best predicted value,
+add the data into the training data"
+python Umetsu_GFP_combo.py Umetsu_GFP_T-scale.csv 1 | tee result.txt
+
+where 1 is a seed for random number (the same results are obtained when using the same seed).
+In actual research, the above command is performed multiple times using diferent seeds to obtain the average.
+The result in the GFP paper is the average of seeds 1-1000. 
+
+
+4. Predict for the whole sequence space (Main result in the GFP paper)
+
+Make an input file for prediction.
+perl Umetsu_GFP_ssf_pred.pl Umetsu_GFP.csv T-scale 4 > Umetsu_GFP_T-scale_pred.csv
+
+In this file, the first 155 rows describe training data with their feature vectors and scores calculated from experimentally measured fluorescence intensity and fluorescence change.
+The remaining rows describe data for which prediction will be performed with their feature vectors and pseudo-scores 1 (since they are unknown).
+
+After making an input file, perform machine learning using COMBO.
+Train a model with the 155 training data,
+and predict for the remaining data in the whole sequence space (160,000-155).
+python Umetsu_GFP_combo_pred.py Umetsu_GFP_T-scale_pred.csv seed npred | tee result.txt
+
+where "seed" is an arbitrary integer used as a seed for random number,
+"npred" is always 1 (the option to output predicted scores).
+The output is a list of the index of sequences and their predicted scores. 
+The index 0 corresponds to the first data for prediction (i.e. 156-th data in the input file).
+The Result in the GFP paper is the average of seeds 1-10. 
+
+
+5. 
+
+The programs with .pl and .py includes comments for beginners; please read.
